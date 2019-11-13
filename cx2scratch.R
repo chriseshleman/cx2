@@ -107,6 +107,14 @@ jd18.2 = jd18.2 %>% select_if(not_all_na)
 summary(jd18.2) 
 
 
+jd18.2.small = jd18.2[, seq(1, ncol(jd18.2), 10)]
+jd18.2.small = jd18.2.small[sample(nrow(jd18.2.small), 4000), ] # 4000 random rows 
+
+vis_miss(jd18.2.small, warn_large_data = FALSE)
+gg_miss_var(jd18.2.small, show_pct=TRUE)
+
+
+
 ###
 # Take a sample - 500 rows and 25 variables for short term training. 
 set.seed(10021) 

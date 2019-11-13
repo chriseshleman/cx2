@@ -1,7 +1,7 @@
 ---
 title: "Traveler Experience"
-author: "Christopher Eshleman"
-date: "11/8/2019"
+author: "Planning and Regional Development"
+date: "11/13/2019"
 output: pdf_document
 ---
 
@@ -38,6 +38,11 @@ library(beepr)
 library(ggdendro) 
 library(reshape2) 
 library(tidyr) 
+#install.packages("nanair", dependencies=TRUE, repos='http://cran.rstudio.com/')
+#install.packages("remotes") 
+library(remotes) 
+#remotes::install_github("njtierney/naniar") 
+library(naniar) 
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
@@ -73,7 +78,7 @@ names(jd18) = c(jdlabels)
 We're guessing "Overall.Satisfaction.Index" is the variable of interest. It appears to be scaled from, roughly, 100-1000, which seems to match some of the visualizations in the PDF reports:
 
 ```{r, echo=FALSE, include=TRUE}
-summary(jd18$Overall.Satisfaction.Index) 
+summary(jd18$Overall.Satisfaction.Index)
 ```
 
 The JD Power data has 411 variables. We dropped 26 that promised little value or would actually get in the way of correlation analysis. 
@@ -113,7 +118,62 @@ jd18.2 = jd18.2 %>% select_if(not_all_na) # Remove variables with all NAs.
 
 Here are the variable names after re-labeling and a quick summary of each. Notice the number of missing observations (NAs) and the variation in those missing observations' propensity across different variables. And, to make matters tougher, the missing observations' are distributed variously across survey respondents - they're not limited to certain questions. So when you try and just drop respondents with any NA answers or, conversely, drop survey questions with any NA responses, you're left with nothing. 
 
-This could present real issues - let's chat before we do more. 
+(A list of varible names (labels) and summary statistics takes up the lion's share of this output, starting in a couple of pages.) 
+
+##Understanding the missing data. 
+Is the data missing at random? (Hopefully.) And how much is missing? 
+
+Assuming the missing data is missing at random, we could impute some data points if NAs represent only a fraction of the total. Variables where the share of NAs are too large should probably be omitted.
+
+Check for variables where much of the data is missing using a simple function. 
+
+```{r, echo=TRUE}
+pmiss = function(x){sum(is.na(x))/length(x)*100} 
+# Taking a tip here from https://www.r-bloggers.com/imputing-missing-data-with-r-mice-package/ 
+```
+
+
+Take a random-ish sample of 12% of the variables. (Just pick every 8th column.)
+Then take a truly random sample of 4,000 observations, which is around 10% of the full list of respondents.  
+```{r}
+jd18.2.small = jd18.2[, seq(1, ncol(jd18.2), 8)]
+jd18.2.small = jd18.2.small[sample(nrow(jd18.2.small), 4000), ] # 4000 random rows 
+```
+
+Take a look for patterns in the missing observations. Here's a visualization: 
+
+```{r, include=TRUE, fig.width=8, fig.height=10}
+gg_miss_var(jd18.2.small, show_pct=TRUE)
+#Kudos to Nick Tierney for the tips: https://cran.r-project.org/web/packages/naniar/vignettes/naniar-visualisation.html.
+```
+
+This stuff definitely isn't missing at random. Some variables are missing around 20 percent of observations - and that number looks very consistant across that group of variables. Then the share of missing observations increases, but it looks like it does it in a stepwise fashion - two or three variables at a time will have exactly the same number of missing observations. This continues all the way up until a collection of variables show zero actual measurements - all observations there are missing. 
+
+A check of the data confirms that the first cluster of variables are all missing exactly 21.200 percent of their data. 
+
+```{r, echo=TRUE, include=FALSE}
+apply(jd18.2.small,2,pmiss)
+```
+
+That's way too consistent to be missing at random. 
+
+So we can evaluate NAs further or we can limit the data set to everything missing no more than that much data, then do some strategic selection or imputation and move forward. 
+
+```{r, fig.width=8, fig.height=10}
+vis_miss(jd18.2.small)
+```
+
+
+##Next step: 
+Plot the number of missing observations in a variable grouped by another variable using the facet argument. This would shed light on whether they are missing by survey month - perhaps one question was asked during the April survey but not the other three surveys. Or maybe it varied by the person conducting the survey. Those are the two potential answers that come to mind. 
+
+```{r, echo=FALSE, include=FALSE}
+gg_miss_var(airquality,
+            facet = Month)
+```
+
+
+#Appendix 
 
 ##Variable names (labels):
 
@@ -124,5 +184,9 @@ names(jd18.2)
 ##Summaries: 
 ```{r, echo=FALSE, include=TRUE}
 summary(jd18.2) 
+```
+
+```{r}
+options(warn=0) # turn annoying warnings back on
 ```
 
