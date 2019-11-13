@@ -1,0 +1,120 @@
+---
+title: "Traveler Experience"
+author: "Christopher Eshleman"
+date: "11/8/2019"
+output: pdf_document
+---
+
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include=FALSE)
+```
+
+\pagenumbering{arabic} 
+
+#JD Power data 
+
+OK, what's the primary goal? Is it to understand market segmentation? Or is it to find strong predictors of overall satisfaction? 
+
+There are a number of files in the folders. We really only see two usable raw data files, one apiece for ASQ (ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx) and from JD Power (ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx). Everything else is a PDF report or, in a couple of cases, Excel files that include synthesized tables or data dictionaries. That's as of the morning of 11/5. 
+
+We started with those two data files. In particular, we were interested in the JD Power data since it's potentially so rich and provides a new data source outside of ASQ. 
+
+(One big step for this and all future quantitative analysis of these two data sets is to start making all data sets, for every quarter (ASQ) or year (JD Power), available. Preferably using identical data structure and file naming scheme.) 
+
+```{r}
+setwd("~/Dropbox/Work and research/Port Authority/cx2")
+library(readxl) 
+library(mice) 
+library(dplyr) 
+library(Hmisc) 
+library(imputeMissings) 
+library(ggplot2)
+library(beepr) 
+library(ggdendro) 
+library(reshape2) 
+library(tidyr) 
+
+rm(list = ls()) # clear global environment 
+cat("\014") # clear the console 
+options(warn=-1) # suppress annoying warnings 
+```
+
+
+The ASQ data from ACI is relatively clean. 
+```{r}
+asq193 = read_excel("./ACI - ASQ/2019 Q3/ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx")
+asq193 = as.data.frame(asq193) 
+names(asq193) = tolower(names(asq193)) 
+```
+
+
+The JD Power data is from 2018 and has more than 400 fields. The data "labels" are stored in a separate file with different formatting so we've transposed them and glued them to the master data set. 
+```{r}
+jd18 = read.csv("./JD Power/2018 Study/Raw Data/Client_SPSS_File_W1W4 (1).csv")
+
+jdnames = read_excel("./JD Power/2018 Study/Raw Data/2018 W1-W4 Data Dictionary.xlsx", skip = 1) 
+jdnames = as.data.frame(jdnames) 
+jdnames = jdnames[,c(1,3)] # Pick only the field names and labels. Labels will be important later.
+jdnames = as.data.frame(gsub("[[:punct:]]", "", as.matrix(jdnames))) # Remove special characters.
+# Remove spaces in names, transpose them, and take the labels only for short-term use.
+jdnames$Label = gsub(" ",".",jdnames$Label) 
+jdnames.t = t(jdnames) 
+jdlabels = jdnames.t[2,] # Take the second row only (labels) 
+# Combine JD Power labels with data. 
+jdlabels = head(jdlabels,411) # Only the first 411 rows count 
+names(jd18) = c(jdlabels) 
+```
+
+We're guessing "Overall.Satisfaction.Index" is the variable of interest. It appears to be scaled from 100-1000 or something? 
+```{r}
+summary(jd18$Overall.Satisfaction.Index) 
+```
+
+The JD Power data has 411 variables. We dropped 26 that promised little value or would be difficult to analyze. 
+
+```{r}
+# Take a hint from https://uc-r.github.io/hc_clustering 
+jd18.2 = jd18[,-(1:7)] 
+#jd18.2.2 = jd18.2[,101:200] 
+#jd18.2.3 = jd18.2[201:300]
+#jd18.2.4 = jd18.2[301:398]
+#str(jd18.2.2) 
+#str(jd18.2.3) 
+#str(jd18.2.4) 
+jd18.2$Departure.flight..Travel.Dates = NULL 
+jd18.2$Arrival.flight..Travel.Dates = NULL 
+jd18.2$ZipPostal.code = NULL 
+jd18.2$MRPSURVEYDPSTACKID = NULL 
+jd18.2$AF7.Verbatim = NULL 
+jd18.2$Why.public.transportation.not.used = NULL 
+jd18.2$What.foodBeverages.want.to.find = NULL 
+jd18.2$F15.Verbatim = NULL 
+jd18.2$RS6.Verbatim = NULL 
+jd18.2$TF2B.Verbatim = NULL 
+jd18.2$YF2.Verbatim = NULL 
+jd18.2$YF2.Verbatim.1 = NULL 
+jd18.2$L7.Verbatim = NULL 
+jd18.2$Reason.for.NPS.rating = NULL 
+jd18.2$Other.9 = NULL 
+jd18.2$FB2.Verbatim = NULL 
+jd18.2$RS196.Verbatim = NULL 
+jd18.2$RS197.Verbatim = NULL 
+jd18.2$Regarding.the.cleanliness.of.the.terminal.why.did.you.provide.a.rating.of.MRKTF21B.for.MRKAIRPORT = NULL 
+
+not_all_na = function(x) {!all(is.na(x))} # Quick function 
+jd18.2 = jd18.2 %>% select_if(not_all_na) # Remove variables with all NAs. 
+```
+
+This could present real issues. Here are the variable names after re-labeling and a quick summary of each. Notice the number of missing observations (NAs) and the variation in their propensity across different variables. 
+
+##Variable names (labels):
+
+```{r, echo=FALSE, include=TRUE}
+names(jd18.2) 
+```
+
+##Summaries: 
+```{r, echo=FALSE, include=TRUE}
+summary(jd18.2) 
+```
+
