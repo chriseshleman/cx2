@@ -149,10 +149,10 @@ gg_miss_var(jd18.2.small, show_pct=TRUE)
 
 This stuff definitely isn't missing at random. Some variables are missing around 20 percent of observations - and that number looks very consistant across that group of variables. Then the share of missing observations increases, but it looks like it does it in a stepwise fashion - two or three variables at a time will have exactly the same number of missing observations. This continues all the way up until a collection of variables show zero actual measurements - all observations there are missing. 
 
-A check of the data confirms that the first cluster of variables are all missing exactly 21.200 percent of their data. 
+A check of the data confirms that the first cluster of variables are all missing around 21 or 22 percent of their data. 
 
 ```{r, echo=TRUE, include=FALSE}
-apply(jd18.2.small,2,pmiss)
+head(apply(jd18.2.small,2,pmiss),15)
 ```
 
 That's way too consistent to be missing at random. 
@@ -163,13 +163,42 @@ So we can evaluate NAs further or we can limit the data set to everything missin
 vis_miss(jd18.2.small)
 ```
 
+Do a couple of things in order: 
 
-##Next step: 
+1. Identify variables with no (or practically no) missing observations and review the list. 
+2. Repeat, but including variables up to the 21 percent missing observation shelf. 
+3. Consider using subset #1 or #2 for some predictive work. 
+4. Perform #3 again but using ASQ data. 
+5. Compare top predictors across each data set. Anything interesting or surprising? 
+
+###1. Variables (JD Power) with no NAs. 
+```{r}
+share.Na = as.data.frame(t(jd18.2 %>% 
+   summarise_each(funs(100*mean(is.na(.)))))) 
+```
+
+There are 40 variables without missing values: 
+```{r, include=TRUE, echo=TRUE}
+subset(share.Na, share.Na==0) 
+```
+
+Another 8 have some, but less than 21 percent, missing values: 
+```{r}
+subset(share.Na, share.Na>0 & share.Na<21) 
+```
+
+And a full 140 are missing exactly 21.636 percent of their observations! Here they are: 
+```{r}
+subset(share.Na, share.Na>21.63601 & share.Na<21.6361) 
+```
+
+
+##Future steps? 
 Plot the number of missing observations in a variable grouped by another variable using the facet argument. This would shed light on whether they are missing by survey month - perhaps one question was asked during the April survey but not the other three surveys. Or maybe it varied by the person conducting the survey. Those are the two potential answers that come to mind. 
 
 ```{r, echo=FALSE, include=FALSE}
-gg_miss_var(airquality,
-            facet = Month)
+#gg_miss_var(airquality,
+#            facet = Month)
 ```
 
 
