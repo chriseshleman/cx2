@@ -43,6 +43,7 @@ library(tidyr)
 library(remotes) 
 #remotes::install_github("njtierney/naniar") 
 library(naniar) 
+library(tidyverse) 
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
@@ -64,15 +65,53 @@ jd18 = read.csv("./JD Power/2018 Study/Raw Data/Client_SPSS_File_W1W4 (1).csv")
 table(jd18$SURVEY_MONTH, jd18$SURVEY_YEAR) 
 jdnames = read_excel("./JD Power/2018 Study/Raw Data/2018 W1-W4 Data Dictionary.xlsx", skip = 1) 
 jdnames = as.data.frame(jdnames) 
+```
+
+I need to join the labels to the main data set as the new variable names. 
+I'd been doing that by slapping them together, but a formal merge might be in order. 
+
+```{r, echo=FALSE, include=FALSE}
+head(jdnames$Variable, 20) 
+head(names(jd18),20) 
+tail(jdnames$Variable, 20) 
+tail(names(jd18),20) 
+```
+
+OK, judging by the first 20 and last 20 variable names for both data sets, they look identical. 
+
+```{r}
+jdnames = head(jdnames,411) # Only the first 411 rows count 
 jdnames = jdnames[,c(1,3)] # Pick only field names and label. Label will be important later.
-jdnames = as.data.frame(gsub("[[:punct:]]", "", as.matrix(jdnames))) # Remove special characters.
-# Remove spaces in names, transpose them, and take the labels only for short-term use.
-jdnames$Label = gsub(" ",".",jdnames$Label) 
-jdnames.t = t(jdnames) 
-jdlabels = jdnames.t[2,] # Take the second row only (labels) 
-# Combine JD Power labels with data. 
-jdlabels = head(jdlabels,411) # Only the first 411 rows count 
-names(jd18) = c(jdlabels) 
+
+```
+
+So now I've got things lined up. But the main data set is horizontal, and I want to try and merge horizontally using the variable names. This is where it got tricky last time.
+
+```{r}
+#jdnames.t = t(jdnames) 
+#jdlabels = jdnames.t[2,] # Take the second row only (labels) 
+#names(jd18) = c(jdlabels) 
+```
+
+
+```{r}
+jdnames$Label = gsub(" ",".",jdnames$Label) # Remove spaces in names, transpose them, and take the labels only for short-term use.
+jdnames.t = as.data.frame(t(jdnames)) 
+
+jdnames.t = jdnames.t %>% 
+  head() %>% 
+  janitor::row_to_names(1) # Nope
+```
+
+NOW clean it up. Then merge. 
+
+```{r}
+jdnames.t = as.data.frame(gsub("[[:punct:]]", "", as.matrix(jdnames.t))) # Remove special characters.
+jd18 = rbind(jdnames.t,jd18) 
+
+jd18 = jd18 %>% 
+  head() %>% 
+  janitor::row_to_names(1) # Nope
 ```
 
 We're guessing "Overall.Satisfaction.Index" is the variable of interest. It appears to be scaled from, roughly, 100-1000, which seems to match some of the visualizations in the PDF reports:
