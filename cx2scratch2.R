@@ -18,6 +18,7 @@ library(tree)
 library(rpart) 
 library(rpart.plot)
 library(expss) 
+library(ggplot2)
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
@@ -29,12 +30,10 @@ pmiss = function(x){sum(is.na(x))/length(x)*100}
 # What to do? This is Part 2, basic tree. Part 1 was an NA analysis and Part 3 can be advanced tree methods (bagging / random forest). 
 
 #1. Load data and munge - classify 
-#2. Tree JDP classification 
-#3. Interpret 
-#4. Cross-validate 
-#5. Interpret 
-#6. Repeat ASQ
-#7. Random forest 
+#2. Tree JDP classification (and interpret) 
+#3. Cross-validate and prune (and interpret) 
+#4. Extension (bagging, random forest, boosting) (and interpret) 
+#5. Repeat 2-5 with ASQ
 
 ###1. Load data and munge - classify 
 asq193 = as.data.frame(read_excel("./ACI - ASQ/2019 Q3/ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx"))
@@ -76,13 +75,6 @@ jdp$Electronics=NULL
 jdp$Toiletries=NULL
 jdp$Other.merchandise=NULL 
 jdp$Other.services=NULL 
-#jdp$merch = ifelse(jdp$Food.beverages.purchased==1, 1, ifelse(jdp$Books.Magazines==1,1,
-#                                                              ifelse(jdp$Clothing==1,1, 
-#                                                                     ifelse(jdp$Sunglasses==1,1,
-#                                                                            ifelse(jdp$Electronics==1,1,
-#                                                                                   ifelse(jdp$Toiletries==1,1,
-#                                                                                         ifelse(jdp$Other.merchandise==1,1,0)))))))
-
 
 # drop the 99s - this drops the population from 40k to 16k. (Try using a loop later) 
 names(jdp) 
@@ -127,13 +119,14 @@ jdp$How.would.you.rate.your.overall.experience.at.Airport.Evaluated.=NULL
   # ... and pick the subtree corresponding to that alpha. 
 set.seed (111) 
 train = sample(1:nrow(jdp), nrow(jdp)/2) 
+
 tree.jdp = tree(Overall.Satisfaction.Index~.-high, jdp, subset=train) 
 length(names(jdp)) 
 summary(tree.jdp) 
 # Four variables (of 27) used in constructing a tree with eight nodes. 
 # One or more of those four variables is active within the tree: 
 plot(tree.jdp) 
-text(tree.jdp, pretty=0)
+text(tree.jdp, pretty=0) 
 # The label indicates the left branch at a split. 
 # So those experiencing lower "comfort" levels at the terminal (below 7.5) 
 # also have lower total satisfaction. 
@@ -141,25 +134,20 @@ text(tree.jdp, pretty=0)
 # have even worse experiences than others. 
 # And of those with better terminal-specific experiences, access to entertainment or "activity" was a strong predictor 
 # in total satisfaction. 
+
+# 3. Pruning 
 # Further, terminal cleanliness contributed to higher satisfaction levels, although 
 # pruning the tree to five or six nodes eliminates cleanliness: 
 cv.jdp = cv.tree(tree.jdp) 
-cv.jdp # Eight-node tree provides the lowest error 
+cv.jdp 
+# The complex tree of eight nodes is still selected. 
+# I could still prune it: 
 plot(cv.jdp$size, cv.jdp$dev ,type='b') 
 prune.jdp = prune.tree(tree.jdp, best = 5) 
 plot(prune.jdp) 
 text(prune.jdp, pretty=0) 
 
-
-# Split training test for test error estimation 
-set.seed(113)   
-smp_siz = floor(0.75*nrow(jdp)) 
-train_ind = sample(seq_len(nrow(jdp)),size = smp_siz) 
-train = jdp[train_ind,] 
-test = jdp[-train_ind,] 
-
-# In keeping with the cross-validation results, we use the unpruned tree to make predictions on the test set.
-
+# ... But use the unpruned tree for prediction. 
 yhat = predict(tree.jdp, newdata=jdp[-train ,]) 
 jdp.test = jdp[-train ,"Overall.Satisfaction.Index"] 
 plot(yhat, jdp.test) 
@@ -167,14 +155,41 @@ abline(0, 1)
 mean((yhat-jdp.test)^2) 
 sqrt(mean((yhat-jdp.test)^2)) 
 # In other words, the test set MSE associated with the regression tree 
-# is 5,500. The square root of the MSE is therefore around 74, 
-# indicating that this model leads to test predictions that are within around 74 
-# satisfaction points of the true level of satisfaction for the group.
+# is around 5,200. The square root of the MSE is therefore around 72, 
+# indicating that this model leads to test predictions that are within around 72 
+# satisfaction points of the true level of satisfaction for the group. 
 
+#4. Bagging / random forest 
+# Bagging is random forest where m=p. All predictors are considered at each tree split.
+# Note that the random forest function only runs if characters are converted to factors. 
+str(jdp) # "high" is a character and so is "clarity.signs" ... 
+jdp.fac = jdp %>% mutate_if(is.character, as.factor) # ... convert everything (just these two characters) to factors. 
+str(jdp.fac) 
+set.seed(112) 
+bag.jdp = randomForest(Overall.Satisfaction.Index ~.-high, data=jdp.fac, subset=train, 
+                                    mtry=27, importance =TRUE) 
+bag.jdp 
+# 
+# HERE HERE HERE 
+yhat.bag = predict(bag.jdp ,newdata=jdp[-train ,])
+plot(yhat.bag, jdp.test)
+abline (0 ,1)
+mean((yhat.bag-jdp.test)^2)
+# 
+bag.jdp=randomForest(medv∼.,data=jdp,subset=train, mtry=13,ntree=25)
+yhat.bag = predict(bag.jdp ,newdata=jdp[-train ,])
+mean((yhat.bag-jdp.test)^2)
+# 
+set . seed (1)
+rf.jdp=randomForest(medv∼.,data=jdp,subset=train,
+                         mtry=6,importance =TRUE)
+yhat.rf = predict(rf.jdp ,newdata=jdp[-train ,])
+mean((yhat.rf-jdp.test)^2)
+#
+importance(rf.jdp)
+# TO HERE HERE 
 
-
-# HERE 
-
+# Below is just leftovers pre-12/16
 
 # 
 tree.jdp = tree(Overall.Satisfaction.Index ~ .-high, data=jdp) 
