@@ -33,6 +33,8 @@ library(beepr)
 library(ggdendro) 
 library(reshape2) 
 library(tidyr) 
+library(visdat) 
+
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
@@ -104,14 +106,11 @@ jd18.2$Regarding.the.cleanliness.of.the.terminal.why.did.you.provide.a.rating.of
 not_all_na = function(x) {!all(is.na(x))}
 jd18.2 = jd18.2 %>% select_if(not_all_na) 
 
-summary(jd18.2) 
-
-
 jd18.2.small = jd18.2[, seq(1, ncol(jd18.2), 10)]
 jd18.2.small = jd18.2.small[sample(nrow(jd18.2.small), 4000), ] # 4000 random rows 
 
-vis_miss(jd18.2.small, warn_large_data = FALSE)
-gg_miss_var(jd18.2.small, show_pct=TRUE)
+vis_miss(jd18.2.small, warn_large_data = FALSE) 
+gg_miss_var(jd18.2.small, show_pct=TRUE) 
 
 
 
@@ -162,4 +161,5 @@ head(cormat)
 melted_cormat = melt(cormat) 
 head(melted_cormat) 
 
+beep(7) 
 beep(2) 

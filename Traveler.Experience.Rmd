@@ -13,11 +13,7 @@ knitr::opts_chunk$set(echo = FALSE, include=FALSE)
 
 #JD Power data 
 
-We've spent a little time with the ASQ and JD Power data sets. A brief discussion follows. 
-
-It's worth asking this question up front: what's a primary goal of this exploration (or subsequent correlation analysis)? Is it to understand market segmentation at the airports? Or is it to find strong predictors of overall satisfaction? 
-
-We can address that later. For now, we see a number of files in the folders. But there are really two critical raw data files: 
+The folders include two critical raw data files: 
 
 1. One ASQ raw data file from 2019 (ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx), and,
 2. One JD Power raw data file from 2018 (Client_SPSS_File_W1W4 (1).csv). 
@@ -27,48 +23,40 @@ Everything else is a PDF report or, in a couple of cases, Excel files that inclu
 We started with those two data files. In particular, we were interested in the JD Power data since it's potentially so rich and provides a new data source outside of ASQ. 
 
 ```{r}
-setwd("~/Dropbox/Work and research/Port Authority/cx2")
+setwd("~/Dropbox/Work and research/Port Authority/cx2") 
 library(readxl) 
 library(mice) 
 library(dplyr) 
 library(Hmisc) 
 library(imputeMissings) 
-library(ggplot2)
+library(ggplot2) 
 library(beepr) 
 library(ggdendro) 
 library(reshape2) 
 library(tidyr) 
-#install.packages("nanair", dependencies=TRUE, repos='http://cran.rstudio.com/')
-#install.packages("remotes") 
 library(remotes) 
 #remotes::install_github("njtierney/naniar") 
 library(naniar) 
 library(tidyverse) 
+library(tree) 
+library(rpart) 
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
 options(warn=-1) # suppress annoying warnings 
 ```
 
-
-The ASQ data from ACI is relatively clean. 
-```{r}
-asq193 = read_excel("./ACI - ASQ/2019 Q3/ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx")
-asq193 = as.data.frame(asq193) 
-names(asq193) = tolower(names(asq193)) 
-```
-
-The JD Power data set is rougher, but potentially very rich. It has more than 400 fields and around 40,000 observations taken from four survey visits (multiple days) each in late 2017 through fall 2018. The data "labels" are stored in a separate file with different formatting so we've transposed them and glued them to the master data set. 
+The ASQ data is relatively clean. The JD Power data set is rough, but potentially very rich. It has more than 400 fields and around 40,000 observations taken from four survey visits (multiple days each) in late 2017 through fall 2018. The data "labels" are stored in a separate file with different formatting so we've transposed them and glued them onto the master data set. 
 
 ```{r}
 jd18 = read.csv("./JD Power/2018 Study/Raw Data/Client_SPSS_File_W1W4 (1).csv")
-table(jd18$SURVEY_MONTH, jd18$SURVEY_YEAR) 
 jdnames = read_excel("./JD Power/2018 Study/Raw Data/2018 W1-W4 Data Dictionary.xlsx", skip = 1) 
 jdnames = as.data.frame(jdnames) 
 ```
 
-I need to join the labels to the main data set as the new variable names. 
-I'd been doing that by slapping them together, but a formal merge might be in order. 
+```{r, include=TRUE}
+#table(jd18$SURVEY_MONTH, jd18$SURVEY_YEAR) 
+```
 
 ```{r, echo=FALSE, include=FALSE}
 head(jdnames$Variable, 20) 
@@ -77,50 +65,40 @@ tail(jdnames$Variable, 20)
 tail(names(jd18),20) 
 ```
 
-OK, judging by the first 20 and last 20 variable names for both data sets, they look identical. 
 
 ```{r}
 jdnames = head(jdnames,411) # Only the first 411 rows count 
 jdnames = jdnames[,c(1,3)] # Pick only field names and label. Label will be important later.
-
-```
-
-So now I've got things lined up. But the main data set is horizontal, and I want to try and merge horizontally using the variable names. This is where it got tricky last time.
-
-```{r}
-#jdnames.t = t(jdnames) 
-#jdlabels = jdnames.t[2,] # Take the second row only (labels) 
-#names(jd18) = c(jdlabels) 
-```
-
-
-```{r}
 jdnames$Label = gsub(" ",".",jdnames$Label) # Remove spaces in names, transpose them, and take the labels only for short-term use.
-jdnames.t = as.data.frame(t(jdnames)) 
-
-jdnames.t = jdnames.t %>% 
-  head() %>% 
-  janitor::row_to_names(1) # Nope
 ```
-
-NOW clean it up. Then merge. 
 
 ```{r}
-jdnames.t = as.data.frame(gsub("[[:punct:]]", "", as.matrix(jdnames.t))) # Remove special characters.
-jd18 = rbind(jdnames.t,jd18) 
+#jdnames = as.data.frame(t(jdnames)) 
+#jdnames = jdnames %>% 
+#  head() %>% 
+#  janitor::row_to_names(1) 
+#jd18.test = rbind(jdnames,jd18) 
 
-jd18 = jd18 %>% 
-  head() %>% 
-  janitor::row_to_names(1) # Nope
+#jdnames.t = as.data.frame(gsub("[[:punct:]]", "", as.matrix(jdnames.t))) # Remove special characters.
+
+#jd18.test = jd18.test %>% 
+#  head() %>% 
+#  janitor::row_to_names(1) # Nope
+
+# rm(jd182) 
 ```
 
-We're guessing "Overall.Satisfaction.Index" is the variable of interest. It appears to be scaled from, roughly, 100-1000, which seems to match some of the visualizations in the PDF reports:
+
+```{r}
+jdnome = c(t(jdnames$Label))
+names(jd18) = jdnome 
+```
+
+"Overall.Satisfaction.Index" is likely the variable of most interest. It appears to be scaled from, roughly, 100-1000, which seems to match some of the visualizations in the PDF reports:
 
 ```{r, echo=FALSE, include=TRUE}
 summary(jd18$Overall.Satisfaction.Index)
 ```
-
-The JD Power data has 411 variables. We dropped 26 that promised little value or would actually get in the way of correlation analysis. 
 
 ```{r}
 # Take a hint from https://uc-r.github.io/hc_clustering 
@@ -155,60 +133,50 @@ not_all_na = function(x) {!all(is.na(x))} # Quick function
 jd18.2 = jd18.2 %>% select_if(not_all_na) # Remove variables with all NAs. 
 ```
 
-Here are the variable names after re-labeling and a quick summary of each. Notice the number of missing observations (NAs) and the variation in those missing observations' propensity across different variables. And, to make matters tougher, the missing observations' are distributed variously across survey respondents - they're not limited to certain questions. So when you try and just drop respondents with any NA answers or, conversely, drop survey questions with any NA responses, you're left with nothing. 
+##Missing data
 
-(A list of varible names (labels) and summary statistics takes up the lion's share of this output, starting in a couple of pages.) 
-
-##Understanding the missing data. 
-Is the data missing at random? (Hopefully.) And how much is missing? 
-
-Assuming the missing data is missing at random, we could impute some data points if NAs represent only a fraction of the total. Variables where the share of NAs are too large should probably be omitted.
-
-Check for variables where much of the data is missing using a simple function. 
+The JD Power data is big, so we started with a sample, described below. Notice the number of missing observations (NAs) and the variation in those missing observations' propensity across different variables. And, to make matters tougher, the missing observations' are distributed variously across survey respondents - they're not limited to certain questions. So when you try and just drop respondents with any missing responses or, conversely, drop survey questions with any NA responses, you're left with next-to-no data. 
 
 ```{r, echo=TRUE}
 pmiss = function(x){sum(is.na(x))/length(x)*100} 
 # Taking a tip here from https://www.r-bloggers.com/imputing-missing-data-with-r-mice-package/ 
 ```
 
+We started with a random-ish sample: 12% of the variables (we just picked every 8th column) and took a truly random sample of 4,000 observations, which is around 10% of the full list of respondents. 
 
-Take a random-ish sample of 12% of the variables. (Just pick every 8th column.)
-Then take a truly random sample of 4,000 observations, which is around 10% of the full list of respondents.  
 ```{r}
 jd18.2.small = jd18.2[, seq(1, ncol(jd18.2), 8)]
 jd18.2.small = jd18.2.small[sample(nrow(jd18.2.small), 4000), ] # 4000 random rows 
 ```
 
-Take a look for patterns in the missing observations. Here's a visualization: 
+There are obvious patterns in that sample: 
 
 ```{r, include=TRUE, fig.width=8, fig.height=10}
 gg_miss_var(jd18.2.small, show_pct=TRUE)
 #Kudos to Nick Tierney for the tips: https://cran.r-project.org/web/packages/naniar/vignettes/naniar-visualisation.html.
 ```
 
-This stuff definitely isn't missing at random. Some variables are missing around 20 percent of observations - and that number looks very consistant across that group of variables. Then the share of missing observations increases, but it looks like it does it in a stepwise fashion - two or three variables at a time will have exactly the same number of missing observations. This continues all the way up until a collection of variables show zero actual measurements - all observations there are missing. 
-
-A check of the data confirms that the first cluster of variables are all missing around 21 or 22 percent of their data. 
-
 ```{r, echo=TRUE, include=FALSE}
 head(apply(jd18.2.small,2,pmiss),15)
 ```
 
-That's way too consistent to be missing at random. 
+Overall, roughly half of the data is missing. And it definitely isn't missing at random. Some variables are missing no observation. Many are missing around 20 percent - and that number looks very consistant across that group of variables. Then the share of missing observations increases. This continues all the way up until a collection of variables show no actual measurements - all observations there are missing. 
 
-So we can evaluate NAs further or we can limit the data set to everything missing no more than that much data, then do some strategic selection or imputation and move forward. 
-
-```{r, fig.width=8, fig.height=10}
+```{r, include=TRUE, fig.width=8, fig.height=10}
 vis_miss(jd18.2.small)
 ```
 
-Do a couple of things in order: 
+So we can evaluate NAs further or we can limit the data set to everything missing no more than that much data, then do some strategic selection or imputation and move forward. 
+
+A few potential next steps, in order: 
 
 1. Identify variables with no (or practically no) missing observations and review the list. 
 2. Repeat, but including variables up to the 21 percent missing observation shelf. 
 3. Consider using subset #1 or #2 for some predictive work. 
 4. Perform #3 again but using ASQ data. 
 5. Compare top predictors across each data set. Anything interesting or surprising? 
+
+We've taken step 1 below. 
 
 ###1. Variables (JD Power) with no NAs. 
 ```{r}
@@ -217,38 +185,57 @@ share.Na = as.data.frame(t(jd18.2 %>%
 ```
 
 There are 40 variables without missing values: 
-```{r, include=TRUE, echo=FALSE}
+```{r, include=TRUE, echo=FALSE} 
 short = subset(share.Na, share.Na==0) 
+names(short) = c("Share.NA") 
 short 
+short = jd18.2[ , colSums(is.na(jd18.2)) == 0] 
+
 ```
 
 .
 Another eight have around 13 or 14 percent missing values: 
 ```{r, include=TRUE, echo=FALSE}
-subset(share.Na, share.Na>0 & share.Na<15) #21
+short2 = subset(share.Na, share.Na>0 & share.Na<15) #21
+names(short2) = c("Share.NA") 
+short2
+rm(short2) 
 ```
 
 .
 Then 140 variables missing exactly 21.636 percent of their observations! Here they are: 
 ```{r, include=TRUE, echo=FALSE}
-subset(share.Na, share.Na>21.63601 & share.Na<21.6361) 
+short3 = subset(share.Na, share.Na>21.63601 & share.Na<21.6361) 
+names(short3) = c("Share.NA") 
+short3 
+rm(short3) 
 ```
 
-##To do 
-```{r}
-means = as.data.frame(colMeans(is.na(jd18.2))) 
+
+\pagebreak
+
+##Summary stats for JD Power variables with no missing observations
+```{r, include=TRUE}
+#means = as.data.frame(colMeans(is.na(jd18.2))) 
+jd18.2nona = jd18.2[ , colSums(is.na(jd18.2)) == 0] 
+summary(jd18.2nona)
+write.csv(jd18.2nona,"./JDPower18_noNA.csv") 
+```
+
+\pagebreak
+
+##Same thing for ASQ data (all of it - only 11 variables there have no missing values)
+```{r, include=TRUE}
+asq193 = read_excel("./ACI - ASQ/2019 Q3/ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx")
+asq193 = as.data.frame(asq193) 
+names(asq193) = tolower(names(asq193)) 
+summary(asq193)
 ```
 
 
+\pagebreak
 
-##Future steps? 
-Visualizing the number of missing observations in one variable faceted (grouped) by another variable may shed light on whether they are missing by survey month - perhaps one question was asked during the April survey but not the other three surveys. Or maybe it varied by the person conducting the survey. Those are the two potential answers that come to mind. 
-
-```{r, echo=FALSE, include=FALSE}
-#gg_miss_var(airquality,
-#            facet = Month)
-```
-
+#PAGE LEFT INTENTIONALLY BLANK
 
 \pagebreak
 

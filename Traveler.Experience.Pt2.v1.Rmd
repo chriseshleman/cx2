@@ -1,0 +1,142 @@
+---
+title: "Traveler.Experience.Pt2.v1"
+author: "Planning & Regional Development"
+date: "12/4/2019"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include=FALSE)
+```
+
+\pagenumbering{arabic} 
+
+#Part 2. 
+
+WORK THIS OUT IN cx2scratch and bring over here when finished. 
+
+
+
+
+
+
+
+```{r}
+setwd("~/Dropbox/Work and research/Port Authority/cx2") 
+library(readxl) 
+library(mice) 
+library(dplyr) 
+library(Hmisc) 
+library(imputeMissings) 
+library(ggplot2) 
+library(beepr) 
+library(ggdendro) 
+library(reshape2) 
+library(tidyr) 
+library(remotes) 
+#remotes::install_github("njtierney/naniar") 
+library(naniar) 
+library(tidyverse) 
+library(tree) 
+library(rpart) 
+
+rm(list = ls()) # clear global environment 
+cat("\014") # clear the console 
+options(warn=-1) # suppress annoying warnings 
+```
+
+```{r, echo=FALSE}
+pmiss = function(x){sum(is.na(x))/length(x)*100} 
+```
+
+
+The ASQ data from ACI is relatively clean. 
+```{r}
+asq193 = read_excel("./ACI - ASQ/2019 Q3/ACI ASQ Survey Main_ Q3 2019 Data-EXCEL-v1.xlsx")
+asq193 = as.data.frame(asq193) 
+names(asq193) = tolower(names(asq193)) 
+```
+
+The JD Power data (minus variables with significant missing observations) has been cleaned in Part 1. 
+
+```{r}
+jdp18 = read.csv("./JDPower18_noNA.csv") 
+```
+
+There are obvious patterns in that sample: 
+
+```{r, include=TRUE, fig.width=8, fig.height=10}
+gg_miss_var(asq193, show_pct=TRUE)
+```
+
+```{r, echo=TRUE, include=FALSE}
+head(apply(asq193,2,pmiss),15)
+```
+
+Overall, roughly half of the data is missing. And it definitely isn't missing at random. Some variables are missing no observation. Many are missing around 20 percent - and that number looks very consistant across that group of variables. Then the share of missing observations increases. This continues all the way up until a collection of variables show no actual measurements - all observations there are missing. 
+
+```{r, include=TRUE, fig.width=8, fig.height=10}
+vis_miss(asq193)
+```
+
+So we can evaluate NAs further or we can limit the data set to everything missing no more than that much data, then do some strategic selection or imputation and move forward. 
+
+A few potential next steps, in order: 
+
+1. Identify variables with no (or practically no) missing observations and review the list. 
+2. Repeat, but including variables up to the 21 percent missing observation shelf. 
+3. Consider using subset #1 or #2 for some predictive work. 
+4. Perform #3 again but using ASQ data. 
+5. Compare top predictors across each data set. Anything interesting or surprising? 
+
+We've taken step 1 below. 
+
+###1. Variables (JD Power) with no NAs. 
+```{r}
+share.Na = as.data.frame(t(jd18.2 %>% 
+   summarise_each(funs(100*mean(is.na(.)))))) 
+```
+
+There are 40 variables without missing values: 
+```{r, include=TRUE, echo=FALSE} 
+short = subset(share.Na, share.Na==0) 
+names(short) = c("Share.NA") 
+short 
+short = jd18.2[ , colSums(is.na(jd18.2)) == 0] 
+
+```
+
+
+#Tree 
+```{r}
+summary(short$Overall.Satisfaction.Index) 
+short$high = ifelse(short$Overall.Satisfaction.Index <= 765,"No","Yes") 
+#jd18.tree = sapply(jd18,function(x) as.numeric(as.character(x))) 
+#tree.jd18 = tree(high ~., data=jd18.tree) 
+
+rm(nombres) 
+sort(names(jd18)) 
+jd18.noDup = jd18[, !duplicated(colnames(jd18))] 
+
+# Grow tree 
+fit = rpart(Overall.Satisfaction.Index ~ .,
+   method="anova", data=short) #method="class" 
+
+printcp(fit) # display the results 
+plotcp(fit) # visualize cross-validation results 
+summary(fit) # detailed summary of splits 
+
+# plot tree
+plot(fit, uniform=TRUE,
+   main="Regression Tree for Satisfaction") 
+text(fit, use.n=TRUE, all=TRUE, cex=.8) 
+
+# create attractive postscript plot of tree 
+post(fit, file = "./tree.ps",
+   title = "Regression Tree for Satisfaction") 
+```
