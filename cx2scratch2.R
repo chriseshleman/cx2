@@ -160,114 +160,43 @@ sqrt(mean((yhat-jdp.test)^2))
 # satisfaction points of the true level of satisfaction for the group. 
 
 #4. Bagging / random forest 
+# ISL 
 # Bagging is random forest where m=p. All predictors are considered at each tree split.
 # Note that the random forest function only runs if characters are converted to factors. 
 str(jdp) # "high" is a character and so is "clarity.signs" ... 
 jdp.fac = jdp %>% mutate_if(is.character, as.factor) # ... convert everything (just these two characters) to factors. 
 str(jdp.fac) 
+
 set.seed(112) 
-bag.jdp = randomForest(Overall.Satisfaction.Index ~.-high, data=jdp.fac, subset=train, 
-                                    mtry=27, importance =TRUE) 
+bag.jdp = randomForest(Overall.Satisfaction.Index ~.-high, data=jdp.fac, 
+                       subset=train, mtry=27, importance =TRUE) 
 bag.jdp 
-# 
-# HERE HERE HERE 
-yhat.bag = predict(bag.jdp ,newdata=jdp[-train ,])
-plot(yhat.bag, jdp.test)
-abline (0 ,1)
+
+yhat.bag = predict(bag.jdp, newdata=jdp.fac[-train ,]) 
+plot(yhat.bag, jdp.test) 
+abline(0,1) 
 mean((yhat.bag-jdp.test)^2)
-# 
-bag.jdp=randomForest(medv∼.,data=jdp,subset=train, mtry=13,ntree=25)
-yhat.bag = predict(bag.jdp ,newdata=jdp[-train ,])
-mean((yhat.bag-jdp.test)^2)
-# 
-set . seed (1)
-rf.jdp=randomForest(medv∼.,data=jdp,subset=train,
-                         mtry=6,importance =TRUE)
-yhat.rf = predict(rf.jdp ,newdata=jdp[-train ,])
-mean((yhat.rf-jdp.test)^2)
-#
-importance(rf.jdp)
-# TO HERE HERE 
+# So the test MSE associated with the bagged regression tree is 2667. 
+# That's roughly half the MSE from the original tree. 
+# Try re-doing by setting the number of trees manually ... 
+bag.jdp2 = randomForest(Overall.Satisfaction.Index ~.-high, data=jdp.fac,
+                        subset=train, mtry=27, ntree=25) 
+yhat.bag2 = predict(bag.jdp2, newdata=jdp.fac[-train ,]) 
+mean((yhat.bag2-jdp.test)^2)
+# ... no difference, in fact the error grows slightly. 
 
-# Below is just leftovers pre-12/16
+# Try a random forest 
+set.seed (113) 
+rf.jdp = randomForest(Overall.Satisfaction.Index ~.-high, data=jdp.fac, 
+                       subset=train, mtry=9, importance =TRUE) 
+rf.jdp 
 
-# 
-tree.jdp = tree(Overall.Satisfaction.Index ~ .-high, data=jdp) 
-plot(tree.jdp) 
-text(tree.jdp, cex=.6) 
+yhat.rf = predict(rf.jdp, newdata=jdp.fac[-train ,]) 
+plot(yhat.rf, jdp.test) 
+abline(0,1) 
+mean((yhat.rf-jdp.test)^2) 
 
-summary(tree.jdp) 
-
-
-
-# Classification 
-jdp$high = ifelse(jdp$Overall.Satisfaction.Index>900,"high","low") 
-# tree.jdp.class = tree(high ~ .-Overall.Satisfaction.Index, data=train) 
-tree.jdp.class = rpart(high ~ .-Overall.Satisfaction.Index, data=train)
-summary(tree.jdp.class) 
-plot(tree.jdp.class, uniform=TRUE, branch=0.6, margin=0.05) 
-text(tree.jdp.class, all=TRUE, use.n=TRUE) 
-title("Training Set Classification Tree") 
-
-# HERE 
-predictions = predict(tree.jdp.class, test, type="class")
-table(test$high, predictions) 
-
-prune.class = prune(tree.jdp.class, cp=0.02) # pruning the tree 
-plot(prune.class, uniform=TRUE, branch=0.6) 
-text(prune.class, all=TRUE, use.n=TRUE) 
-
-rpart.tree = rpart(high ~ ., data=train, parms = list(loss = lmat))  
-predictions = predict(rpart.tree, test.set, type="class") 
-table(test.set$Species, predictions)
-
-plot(rpart.tree)
-text(rpart.tree)
-
-## Define a plotting function with decent defaults
-plot.rpart.obj <- function(rpart.obj, font.size = 0.8) {
-  ## plot decision tree
-  plot(rpart.obj,
-       uniform   = T,    # if 'TRUE', uniform vertical spacing of the nodes is used
-       branch    = 1,    # controls the shape of the branches from parent to child node
-       compress  = F,    # if 'FALSE', the leaf nodes will be at the horizontal plot
-       nspace    = 0.1,
-       margin    = 0.1, # an extra fraction of white space to leave around the borders
-       minbranch = 0.3)  # set the minimum length for a branch
-  
-  ## Add text
-  text(x      = rpart.obj,   #
-       splits = T,           # If tree are labeled with the criterion for the split
-       all    = T,           # If 'TRUE', all nodes are labeled, otherwise just terminal nodes
-       use.n  = T,           # Use numbers to annotate
-       cex    = font.size)   # Font size
-}
-
-plot.rpart.obj(rpart.tree, 1)
-
-library(partykit)
-rparty.tree <- as.party(rpart.tree)
-rparty.tree
-
-plot(rparty.tree)
-
-fit <- rpart(Mileage~Price + Country + Reliability + Type, method="anova", data=cu.summary)
-printcp(fit) # display the results
-plotcp(fit) # visualize cross-validation results
-
-summary(fit) # detailed summary of splits
-
-# create additional plots
-par(mfrow=c(1,2)) # two plots on one page
-rsq.rpart(fit) # visualize cross-validation results 
-
-par(mfrow=c(1,1)) 
-
-# plot tree
-plot(fit, uniform=TRUE, main="Regression Tree for Mileage ")
-text(fit, use.n=TRUE, all=TRUE, cex=.8) 
-
-# create attractive postcript plot of tree
-post(fit, file = "c:/tree2.ps", title = "Regression Tree for Mileage ")
-
-
+# Random forest provides the lowest test error. 
+importance(rf.jdp) 
+varImpPlot(rf.jdp, type=1) 
+varImpPlot(rf.jdp, type=2) 
