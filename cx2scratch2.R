@@ -8,6 +8,9 @@ library(imputeMissings)
 library(ggplot2) 
 library(beepr) 
 library(ggdendro) 
+library(BAMMtools) 
+#install.packages("classInt") 
+library(classInt) 
 library(reshape2) 
 library(tidyr) 
 library(remotes) 
@@ -42,8 +45,16 @@ names(asq193) = tolower(names(asq193))
 jdp = read.csv("./JDPower18_noNA.csv") 
 jdp.index = jdp$X 
 jdp$X = NULL 
-jdp$high = ifelse(jdp$Overall.Satisfaction.Index > 900, "high", "low") 
-  # Consider Jenks (natural) breaks instead next time. 
+# Classify with a natural break. 
+
+summary(jdp$Overall.Satisfaction.Index) 
+boxplot(jdp$Overall.Satisfaction.Index) 
+ggplot(jdp, aes(Overall.Satisfaction.Index)) +
+  geom_density()
+#hi = getJenksBreaks(jdp$Overall.Satisfaction.Index, 1, subset = NULL)
+hi = classIntervals(jdp$Overall.Satisfaction.Index, n = 2, style = "kmeans")
+hi
+#jdp$high = ifelse(jdp$Overall.Satisfaction.Index > 900, "high", "low") 
 
 names(jdp) 
 summary(jdp$Overall.Satisfaction.Index) 
@@ -151,7 +162,7 @@ text(prune.jdp, pretty=0)
 yhat = predict(tree.jdp, newdata=jdp[-train ,]) 
 jdp.test = jdp[-train ,"Overall.Satisfaction.Index"] 
 plot(yhat, jdp.test) 
-abline(0, 1) 
+abline(0,1) 
 mean((yhat-jdp.test)^2) 
 sqrt(mean((yhat-jdp.test)^2)) 
 # In other words, the test set MSE associated with the regression tree 
