@@ -45,7 +45,7 @@ pmiss = function(x){sum(is.na(x))/length(x)*100}
 # Complete 1-4 above with discussions. 
 # Catalog visualizations and save to folder as pdf or png. 
 # Pick 2 key visualizations and toss the rest, and the summary outputs, into an appendix. 
-
+# Visualization from page 311 and a variable importance plot from website (listed below) 
 
 ###1. Load data and munge. Predictor is almost continuous, so don't classify. 
 
@@ -54,7 +54,6 @@ jdp.index = jdp$X
 jdp$X = NULL 
 
 summary(jdp$Overall.Satisfaction.Index) 
-boxplot(jdp$Overall.Satisfaction.Index) 
 ggplot(jdp, aes(Overall.Satisfaction.Index)) +
   geom_density()
 #hi = getJenksBreaks(jdp$Overall.Satisfaction.Index, 1, subset = NULL)
@@ -166,7 +165,7 @@ text(tree.train, pretty=0, cex=0.75)
 
 # Cross-validation 
 cv.train = cv.tree(tree.train) 
-options(scipen=999)
+options(scipen=999) 
 plot(cv.train$size, cv.train$dev, type="b") 
 # Three variables get used as predictors in the training tree, some of them more than once. 
 # The most important variable that has the largest reduction in SSE is general comfort. 
@@ -209,6 +208,7 @@ mean((predict.rf-jdp_test$Overall.Satisfaction.Index)^2)
 importance(rf.jdp) 
 varImpPlot(rf.jdp) 
 varImpPlot(rf.jdp, type=2) 
+# Consider something pretty like this https://topepo.github.io/caret/variable-importance.html 
 
 # Question: what is a tree an obvious alternative to? 
 # How might I expect that alternative to perform? 
