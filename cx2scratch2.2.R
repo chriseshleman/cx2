@@ -1,32 +1,16 @@
 
 setwd("~/Dropbox/Work and research/Port Authority/cx2") 
-library(readxl) 
-library(mice) 
 library(dplyr) 
-library(Hmisc) 
-library(imputeMissings) 
 library(ggplot2) 
 library(beepr) 
-library(ggdendro) 
-library(BAMMtools) 
-#install.packages("classInt") 
-library(classInt) 
-library(reshape2) 
 library(tidyr) 
-library(remotes) 
-#remotes::install_github("njtierney/naniar") 
-library(naniar) 
 library(tidyverse) 
 library(tree) 
 library(randomForest) 
 library(rpart) 
 library(rpart.plot)
-library(expss) 
-library(ggplot2)
-#install.packages("rsample") 
-library(rsample)     # data splitting 
-library(ipred)       # bagging
-library(caret)       # bagging
+library(rsample) 
+library(caret) 
 
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
@@ -38,7 +22,7 @@ pmiss = function(x){sum(is.na(x))/length(x)*100}
 # This is Part 2, trees (basic and advanced). Part 1 was an NA analysis. 
 
 #1. Load data and munge - classify 
-#2. Tree JDP classification (and interpret) 
+#2. Tree JDP (and interpret) 
 #3. Cross-validate and prune (and interpret) 
 #4. Extension (bagging, random forest, boosting) (and interpret) 
 
@@ -53,18 +37,19 @@ jdp = read.csv("./JDPower18_noNA.csv")
 jdp.index = jdp$X 
 jdp$X = NULL 
 
-summary(jdp$Overall.Satisfaction.Index) 
-ggplot(jdp, aes(Overall.Satisfaction.Index)) +
-  geom_density()
-#hi = getJenksBreaks(jdp$Overall.Satisfaction.Index, 1, subset = NULL)
+sat = ggplot(jdp, aes(Overall.Satisfaction.Index, fill="gray")) + 
+  geom_density(alpha = 0.5) + 
+  theme(legend.position = "none") + 
+  labs(x = "Overall Satisfaction", y = "") 
+ggsave(sat, filename = "./Satisfaction.png", width = 5, height = 4, dpi = 300, units = "in", device='png')
+rm(sat) 
 classIntervals(jdp$Overall.Satisfaction.Index, n = 2, style = "kmeans")
 classIntervals(jdp$Overall.Satisfaction.Index, n = 2, style = "fisher") # jenks substitute for larger data sets 
 # both kmeans and fisher (jenks substitute) give us around 730 as a natural breaking point. 
-# but I won't classify - not sure what we gain from it. 
+# but I won't classify - not sure what the analysis would gain aside from interpretability. 
 # jdp$high = ifelse(jdp$Overall.Satisfaction.Index > 730, "high", "low") # if was to classify 
 
 names(jdp) 
-summary(jdp$Overall.Satisfaction.Index) 
 # Subtract airport, state, RS1_96.Verbatim, RS1_97.Verbatim, MRP_SURVEY_DP_STACK_ID, Zip.Postal.code, 
 # Departure.flight...Travel.Dates, Arrival.flight...Travel.Dates, X, What.food.Beverages.want.to.find, 
 # Regional.art..culture..or.historical.displays, Robots..tablet.interfacing..or.other.new.technology, weight
@@ -74,8 +59,6 @@ nombre = names(jdp) %in% c("airport","state", "RS1_96.Verbatim", "RS1_97.Verbati
 jdp = jdp[!nombre] 
 
 # More cleaning ... 
-summary(jdp) 
-
 table(jdp$Took.transportation.to.the.gate) 
 table(jdp$Clarity.of.signs.directions.inside.the.terminal) 
 
@@ -95,7 +78,6 @@ jdp$Other.merchandise=NULL
 jdp$Other.services=NULL 
 
 # drop the 99s - this drops the population from 40k to 16k. (Try using a loop later) 
-names(jdp) 
 jdp = subset(jdp,jdp$Took.transportation.to.the.gate!=99 & #jdp$Clarity.of.signs.directions.inside.the.terminal!=99 & 
                jdp$Cleanliness.of.terminal.concourses.and.hallways!=99 & 
                jdp$Comfort.in.airport..e.g...seating..roominess..etc..!=99 & 
@@ -128,11 +110,7 @@ jdp$Overall.terminal.facilities.experience=NULL
 jdp$How.would.you.rate.your.overall.experience.at.Airport.Evaluated.=NULL 
 jdp$OSAT.Zones.of.Satisfaction=NULL #I just don't know what this is
 
-### Trees 
-# If assuming a non-linear relationship between satisfaction and predictors. 
-#http://www.di.fc.ul.pt/~jpn/r/tree/tree.html#classification-trees
-
-#1.5 Exploration 
+# Brief exploration 
 ggplot(jdp, aes(Overall.Satisfaction.Index,Comfort.in.airport..e.g...seating..roominess..etc..)) +
   geom_point(size = 1) + #, alpha = .05
   geom_smooth() #method="loess" #method="lm" 
@@ -142,7 +120,10 @@ ggplot(jdp, aes(Overall.Satisfaction.Index,Comfort.in.airport..e.g...seating..ro
   geom_point(size = 1) + #, alpha = .05
   geom_smooth() #method="loess" #method="lm" 
 
-#2. Regression tree 
+### 2. Trees 
+# If assuming a non-linear relationship between satisfaction and predictors. 
+#http://www.di.fc.ul.pt/~jpn/r/tree/tree.html#classification-trees
+
 #2a. Grow a tree 
 #2b. Prune to get a sequence of subtrees. Use cross-validation to chose an alpha ... 
 # ... and pick the subtree corresponding to that alpha. 
@@ -157,16 +138,19 @@ jdp_training = training(jdp_split)
 jdp_test = testing(jdp_split) 
 
 # Tree 
-names(jdp_training) 
 tree.train = tree(Overall.Satisfaction.Index~., jdp_training) 
 summary(tree.train) 
+pdf("./Tree.pdf", width=6, height=4.5) 
 plot(tree.train) 
-text(tree.train, pretty=0, cex=0.75) 
+text(tree.train, pretty=0, cex=0.6) 
+dev.off() 
 
-# Cross-validation 
+### 3. Cross-validation 
 cv.train = cv.tree(tree.train) 
 options(scipen=999) 
+pdf("./Tree_cross_validated.pdf", width=6, height=4.5) 
 plot(cv.train$size, cv.train$dev, type="b") 
+dev.off() 
 # Three variables get used as predictors in the training tree, some of them more than once. 
 # The most important variable that has the largest reduction in SSE is general comfort. 
 # The top split assigns travelers reporting "comfort" of 7 or less to the left; they account for 38 percent of travelers. 
@@ -178,7 +162,6 @@ plot(cv.train$size, cv.train$dev, type="b")
 # The other half might have been comfortable with seating availability but were frequently unsatisfied with activity and entertainment options in the airport as a whole. 
 # A fraction (3%) were unsatisfied with comfort level, cleanliness and seating, averaging 413. 
 
-
 # In many cases you prune the tree 
 prune.train = prune.tree(tree.train, best=5) 
 plot(prune.train) 
@@ -189,7 +172,7 @@ predict.jdp = predict(tree.train,newdata=jdp_test)
 plot(predict.jdp,jdp_test$Overall.Satisfaction.Index) 
 abline(0,1) 
 
-### 3a. Bagging (check the mtry and ntree functions) 
+### 4a. Bagging (check the mtry and ntree functions) 
 jdp_training$clarity.signs = NULL 
 jdp_training$bath = NULL 
 bag.train = randomForest(Overall.Satisfaction.Index~., data=jdp_training, mtry=8) #, ntree=15
@@ -199,12 +182,13 @@ predict.bag = predict(bag.train,newdata=jdp_test)
 mean((predict.jdp-jdp_test$Overall.Satisfaction.Index)^2) 
 mean((predict.bag-jdp_test$Overall.Satisfaction.Index)^2) 
 
-### 3b. Random forest 
+### 4b. Random forest 
 # (Question - is it dumb to try and predict like this using this many ordinal variables as predictors?) 
 rf.jdp = randomForest(Overall.Satisfaction.Index~., data=jdp_training, mtry=5, importance=T) 
 predict.rf = predict(rf.jdp,newdata=jdp_test) 
 mean((predict.rf-jdp_test$Overall.Satisfaction.Index)^2) 
 
+### 4c. Variable importance, if there's time. 
 importance(rf.jdp) 
 varImpPlot(rf.jdp) 
 varImpPlot(rf.jdp, type=2) 
